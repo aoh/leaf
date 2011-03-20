@@ -1,0 +1,37 @@
+
+(def (w a) (a a))
+(def (y a) (w (fn (b) (a (b b)))))
+(def (pair a b c) (c a b))
+(def (t a b) a)
+(def (f a b) b)
+(def (nil c a b) t)
+(def (nil? l)  (l t f f))
+(def (rule a b c)
+	(a (b (c f t) (c t t)) (b (c t t) (c f f))))
+
+(def walk 
+	(y (fn (walk a b l)
+		(nil? l
+			(pair (rule a b f) (pair f nil))
+			(pair (rule a b (l t))
+				(walk b (l t) (l f)))))))
+
+(def (next l)
+	(walk f (l t) (l f)))
+
+(def (see l more)
+	(nil? l
+		more
+		(cons
+			(l t 111 32)
+			(see (l f) more))))
+
+(def (evolve level)
+	(see level
+		(cons 10 
+			(evolve
+				(next level)))))
+
+(evolve 
+	(pair f (pair t (pair f nil))))
+

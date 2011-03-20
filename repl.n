@@ -1,0 +1,1061 @@
+; (If then else False) -> else
+; (If then else _) -> (then _)
+; (def (check exp)
+;	(match exp
+;		((cons a b) A)
+;		((app  a b) B)
+;		(else 42)))
+; (def (check-type exp)
+;	(jt-cons (fn (a b) A) 
+;		(jt-app (fn (a b) B) 
+;			(fn (exp) 42))
+;		exp))
+; Data types
+;	pair = 1
+;  symbol = 2
+
+(boot (seq
+
+	;; standard birds
+
+	(def (B x y z) (x (y z)))
+	(def (C x y z) (x z y))
+	(def (D x y z w) (x y (z w)))
+	(def (E x y z w) (x y (z w)))
+	(def (F x y z) (z y x))
+	(def (G x y z w) (x w (y z)))
+	(def (H x y z) (x y z y))
+	(def (I x) x)
+	(def (J x y z w) (x y (x w z)))
+	(def (K x y) x)
+	(def (L x y) (x (y y)))
+	(def (M x) (x x))
+	(def (Q x y) (y (x y)))
+	(def (R x y z) (y z x))
+	(def (S x y z) (x z (y z)))
+	(def (T x y) (y x))
+	(def (U x y) (y (x x y)))
+	(def (V x y z) (z x y))
+	(def (W x y) (x y y))
+	; (def (Y x) (x (Y x)))
+
+	;; lispy birds 
+
+	(def (o f g x) (f (g x)))
+
+	(def caar (o car car))
+	(def cadr (o car cdr))
+	(def cdar (o cdr car))
+	(def cddr (o cdr cdr))
+
+	(def caaar (o car caar))
+	(def caadr (o car cadr))
+	(def cadar (o car cdar))
+	(def caddr (o car cddr))
+	(def cdaar (o cdr caar))
+	(def cdadr (o cdr cadr))
+	(def cddar (o cdr cdar))
+	(def cdddr (o cdr cddr))
+	
+	(def null ())
+
+	(def emit cons)
+
+	(def (fold op)
+		(def (loop st lst)
+			(if (null? lst) 
+				st
+				(loop (op st (car lst)) (cdr lst))))
+		loop)
+
+	(def (foldr op st lst)
+		(if (null? lst) st
+			(op (car lst)
+				(foldr op st (cdr lst)))))
+
+	(def (interval from to)
+		(if (= from to)
+			(cons to ())
+			(cons from
+				(interval (+ from 1) to))))
+
+	(def (iter f)
+		(def (walk st)
+			(cons st 
+				(walk (f st))))
+		walk)
+
+	(def (take lst n)
+		(if (= n 0)
+			null
+			(if (null? lst)
+				null
+				(cons (car lst)
+					(take (cdr lst) (- n 1))))))
+
+	(def length 
+		(def (loop n lst)
+			(if (null? lst) n
+				(loop (+ n 1) (cdr lst))))
+		(loop 0))
+
+	(def (map op lst)
+		(if (null? lst)
+			()
+			(cons (op (car lst))
+				(map op (cdr lst)))))
+
+	(def (zip op a b)
+		(if (null? a)
+			()
+			(cons (op (car a) (car b))
+				(zip op (cdr a) (cdr b)))))
+
+   (def (append a b)
+      (if (null? a)
+         b       
+         (cons (car a) 
+            (append (cdr a) b))))
+
+	(def reverse 
+		(def (loop a b)
+			(if (null? b) a
+				(loop (cons (car b) a) (cdr b))))
+		(loop ()))
+
+	(def (splice-at op lst)
+		(def (splice lst buff)
+			(if (null? lst)
+				(if (null? buff)
+					null
+					(cons (reverse buff) null))
+				(if (op (car lst))
+					(if (null? buff)
+						(splice (cdr lst) buff)
+						(cons (reverse buff) 
+							(splice (cdr lst) null)))
+					(splice (cdr lst) (cons (car lst) buff)))))
+		(splice lst null))
+						
+	(def (and a b) (if a b #f))
+	(def (or a b)  (if a a b))
+	(def (not a) (if a #f #t))
+
+	(def (list-ref lst pos)
+		(if (= pos 0)
+			(car lst)
+			(list-ref (cdr lst) (- pos 1))))
+
+	; step and to are constants, should be lower
+	(def (iota step from to)
+		(if (= from to)
+			null
+			(cons from
+				(iota step (+ from step) to))))
+
+	(def (read-line lst cont)
+		(def (reader buff lst)
+			(if (= (car lst) 10)
+				(cont (reverse buff) (cdr lst))
+				(reader (cons (car lst) buff) (cdr lst))))
+		(reader null lst))
+
+	; parseri on inputin ja symbolitaulun funktio, koska sen taytyy 
+	; pystya internoimaan parsitut symbolit 
+
+
+	;;; 
+	;;; Symbol tries
+	;;; 
+
+;
+;	(def (eq-list = a b)
+;		(if (null? a)
+;			(null? b)
+;			(if (null? b)
+;				#f
+;				(if (= (car a) (car b))
+;					(eq-list = (cdr a) (cdr b))
+;					#f))))
+;
+;	(def (dumb-insert =)
+;		(def (ins lst key val)
+;			(if (null? lst)
+;				(cons (cons key val) null)
+;				(if (eq-list = (caar lst) key)
+;					(cons (cons key val) (cdr lst))
+;					(cons (car lst)
+;						(ins (cdr lst) key val)))))
+;		ins)
+;
+;	(def (dumb-get =)
+;		(def (get lst key def)
+;			(if (null? lst)
+;				def 
+;				(if (eq-list = (caar lst) key)
+;					(cdar lst)
+;					(get (cdr lst) key def))))
+;		get)
+;
+
+	; symbol tree node = (byte . rest) -> this byte
+	;                  = ((byte . then) . rest) -> branch
+	;						 = null -> fail
+   ;						 = (sym . rest) -> this symbol
+
+	;;;
+	;;; Symbol interning 
+	;;;
+
+	(def syms-empty null)
+
+	; -> symbol | #f
+	(def (syms-get node key)
+		(if (null? node)				
+			;; no match
+			#f																;; not found
+			(if (null? key)											;; found
+				;; maybe match
+				(if (symbol? (car node))
+					(car node)
+					#f)
+				(if (eq? (car node) (car key))
+					(syms-get (cdr node) (cdr key))				;; match -> move on
+					(if (symbol? (car node))
+						(syms-get (cdr node) key)					;; skip sym
+						(if (pair? (car node))
+							(or 											;; try branch
+								(syms-get (car node) key)
+								(syms-get (cdr node) key))
+							#f))))))										;; no match
+								
+	(def (syms-put node key val)
+		(if (null? key)
+			(cons val node)											;; insert value
+			(if (null? node)
+				(cons (car key)										;; grow node
+					(syms-put null (cdr key) val))
+				(if (pair? (car node))
+					(if (eq? (caar node) (car key))
+						(cons												;; follow branch
+							(syms-put (car node) key val)
+							(cdr node))
+						(cons (car node)
+							(syms-put (cdr node) key val)))		;; jump over branch
+					(if (symbol? (car node))						;; jump over sym
+						(cons (car node) (syms-put (cdr node) key val))
+						(if (eq? (car node) (car key))			;; move on
+							(cons (car node)
+								(syms-put (cdr node) (cdr key) val))
+							(cons 										;; make a new branch
+								(syms-put null key val)
+								node)))))))
+
+	(def (intern-symbol syms bytes cont)
+		(def this (syms-get syms bytes))
+		;(def this #f)
+		(if this
+			(cont syms this)
+			(seq
+				(def this (mksym bytes))
+				(cont
+					(syms-put syms bytes this)
+					this))))
+
+	; initial env with uninterned names, only containing primitives
+	; used for bootstrapping and as base for the real env
+
+	(def initial-str-env
+		(cons (cons "s" (prim 0)))
+		(cons (cons "k" (prim 1)))
+		(cons (cons "i" (prim 2)))
+		(cons (cons "b" (prim 3)))
+		(cons (cons "c" (prim 4)))
+		(cons (cons "S" (prim 5)))
+		(cons (cons "C" (prim 6)))
+		(cons (cons "B" (prim 7)))
+		(cons (cons "y" (prim 8)))
+		(cons (cons "cons" (prim 20)))
+		(cons (cons "car" (prim 21)))
+		(cons (cons "cdr" (prim 22)))
+		(cons (cons "+" (prim 30)))
+		(cons (cons "-" (prim 31)))
+		(cons (cons "*" (prim 32)))
+		(cons (cons "/" (prim 33)))
+		(cons (cons "%" (prim 34)))
+		(cons (cons "mod" (prim 34)))
+		(cons (cons "=" (prim 35)))
+		(cons (cons ">" (prim 36)))
+		(cons (cons "<" (prim 37)))
+		(cons (cons "if" (prim 40)))
+		(cons (cons "null?" (prim 41)))
+		(cons (cons "fixnum?" (prim 42)))
+		(cons (cons "symbol?" (prim 43)))
+		(cons (cons "eq?" (prim 44)))
+		(cons (cons "@" (prim 45)))
+		(cons (cons "mksym" (prim 46)) )
+		(cons (cons "prim" (prim 47)))
+		(cons (cons "pair?" (prim 48)))
+		(cons (cons "mkapp" (prim 49)))
+		null)
+
+	; intern some initially required symbols
+	; the standard env syms come later 
+	(def initial-syms
+		(fold 
+			(fn (syms bytes)
+				(syms-put syms bytes (mksym bytes)))
+			syms-empty 
+			(cons "fn"
+			(cons "def"
+			(cons "seq"
+			(cons "lit"
+			(cons "quote"
+			(cons "boot"
+			(cons "undefined"
+			(cons "list"
+				(map car initial-str-env)))))))))))
+
+	; intern the names of values in initial env 
+	(def initial-env
+		(map
+			(fn (node)
+				(cons (syms-get initial-syms (car node)) (cdr node)))
+			initial-str-env))
+
+	(def fn-sym (syms-get initial-syms "fn"))
+	(def lit-sym (syms-get initial-syms "lit"))
+	(def def-sym (syms-get initial-syms "def"))
+	(def seq-sym (syms-get initial-syms "seq"))
+	(def quote-sym (syms-get initial-syms "quote"))
+	(def undefined-sym (syms-get initial-syms "undefined"))
+	(def boot-sym (syms-get initial-syms "boot"))
+	(def list-sym (syms-get initial-syms "list"))
+	(def y-sym (syms-get initial-syms "y"))
+	(def cons-sym (syms-get initial-syms "cons"))
+
+	(def scom (prim 0))
+	(def kcom (prim 1))
+	(def icom (prim 2))
+	(def bcom (prim 3))
+	(def ccom (prim 4))
+	(def spcom (prim 5))
+	(def cpcom (prim 6))
+	(def bpcom (prim 7))
+
+
+	;;;
+	;;; Output 
+	;;;
+
+	;(def string->symbol
+	;	(def (make-symtab done)
+	;		(cons 
+	;			(mksym (reverse done))
+	;			(map
+	;				(fn (next)
+	;					(make-symtab (cons next done)))
+	;				(interval 0 (+ (+ 64 64) (+ 64 63))))))
+	;				;;; a hack for bytecode dumping
+	;	(def symtab (make-symtab '()))
+	;	(def (read-symtab bytes symtab)
+	;		(if (null? bytes)
+	;			(car symtab)
+	;			(read-symtab (cdr bytes)
+	;				(list-ref (cdr symtab) (car bytes)))))
+	;	(fn (bytes)
+	;		(read-symtab bytes symtab)))
+
+	;;; Rendering (sexp version)
+
+	(def (render-number val more)
+		(def (to-digit n) 
+			(+ n 48))
+		(def (process digits num)
+			(if (= num 0) 
+				(append digits more)
+				(process
+					(cons (to-digit (mod num 10)) digits)
+					(/ num 10))))
+		(if (= val 0)
+			(cons 48 more)
+			(process () val)))
+
+	(def (render-pair render)
+		(fn (val more)
+			(def (walk val)
+				(if (null? val)
+					(emit 41 more)
+					(if (pair? val)
+						(seq
+							(emit 32)
+							(render (car val))
+							(walk (cdr val)))
+						(seq
+							(emit 32)
+							(emit 46)
+							(emit 32)
+							(render val)
+							(emit 41 more)))))
+			(emit 40)
+			(render (car val))
+			(walk (cdr val))))
+		
+	(def (render-symbol obj more)
+		(append (car obj) more))
+		
+	(def (render-any obj more)	
+		(if (pair? obj)
+			(render-pair render-any obj more)
+		(if (symbol? obj)
+			(render-symbol obj more)
+		(if (fixnum? obj)	
+			(render-number obj more)
+			(emit 63 more)))))
+
+
+
+
+	;;;
+	;;; Parsing 
+	;;;
+
+ 	(def char-lp? (= 40))
+ 	(def char-rp? (= 41))
+	(def char-quote? (= 39))
+	(def (char-digit? x) (and (< 47 x) (< x 58)))
+
+	(def char-comment? (= 59))
+
+ 	(def (char-whitespace? x)
+ 		(or (= x 32) 
+ 			(or (= x 10) 
+				(or (= x 9) 
+					(char-comment? x)))))
+
+
+	(def (char-symbol? x)
+		(and (> x 32)
+			(or (< x 40)
+				(> x 41))))
+
+	(def char-string?  (= 34))
+	(def char-special? (= 35))
+
+ 	(def (wipewhite input)
+		;;; wipe anything until a newline
+		(def (wipe-comment input)
+			(if (null? input)
+				input
+				(if (= (car input) 10)
+					(wipewhite (cdr input))
+					(wipe-comment (cdr input)))))
+
+		(if (null? input)
+			input
+			(if (char-comment? (car input))
+				(wipe-comment (cdr input))
+				(if (char-whitespace? (car input))
+					(wipewhite (cdr input))
+					input))))
+
+	; ehka vain parserin taytyy tehda symboleita, joten 
+	; symbolitaulu voisi olla sen paikallinen muuttuja?
+
+	; (ok syms value input')
+
+	(def (parse-number in syms ok fail)
+		(def (get in n)
+			(if (null? in)
+				(ok syms n in)
+				(if (char-digit? (car in))
+					(get (cdr in) (+ (* n 10) (- (car in) 48)))
+					(ok syms n in))))
+		(if (char-digit? (car in))
+			(get (cdr in) (- (car in) 48))
+			fail))
+
+	(def (parse-symbol in syms ok fail)
+
+		(def (get in buff)
+			(if (null? in)
+				(intern-symbol syms (reverse buff)
+					(fn (syms sym)
+						(ok syms sym in)))
+				(if (char-symbol? (car in))
+					(get (cdr in) (cons (car in) buff))
+					(intern-symbol syms (reverse buff)
+						(fn (symsx sym)
+							(ok symsx sym in)))
+					)))
+
+		(if (char-symbol? (car in))
+			(get (cdr in) (cons (car in) null))
+			fail))
+
+	(def (parse-list parse in syms ok fail)
+		; input is always wiped
+		(def (get in syms buff)
+			(if (null? in)
+				fail
+				(parse syms in 
+					(fn (syms this in)
+						(get (wipewhite in) syms (cons this buff)))
+					(if (char-rp? (car in))
+						(ok syms (reverse buff) (cdr in))
+						fail))))
+
+		(if (char-lp? (car in))
+			(get (wipewhite (cdr in)) syms null)
+			fail))
+
+	(def (parse-scheme-bool input syms ok fail)
+		(if (and (pair? input) (eq? (car input) 35))
+			(ok syms (eq? (cadr input) 116) (cddr input))
+			fail))
+
+	; INDECENT io to stderr via prod combinator, for debug only
+	(def (debug exp rest)
+		(def (walk lst)
+			(if (null? lst)
+				rest
+				(@ (car lst)
+					(walk (cdr lst)))))
+		(walk 
+			(render-any exp null)))
+						
+	(def (collect-string in buff cont)
+		(if (null? in)
+			(cont #f #f)
+			(if (= (car in) 34)
+				(cont 
+					(cons quote-sym (cons (reverse buff) null))
+					(cdr in))
+				(collect-string (cdr in) 
+					(cons (car in) buff)
+					cont))))
+
+	(def (parse-string input syms ok fail)
+		(if (= (car input) 34)
+			(collect-string 
+				(cdr input) 
+				null
+				(fn (bytes input)
+					(if bytes
+						(ok syms bytes input)
+						fail)))
+			fail))
+
+	(def (parse syms input ok fail)
+		(def in (wipewhite input))
+		(if (null? input)
+			(fail 1 input)
+			(parse-number in syms ok
+				(parse-list parse in syms ok
+				(parse-string in syms ok
+				(parse-scheme-bool in syms ok
+				(parse-symbol in syms ok
+				fail)))))))
+				
+
+	; -----------------------------------------------------
+
+
+	;;;
+	;;; Pattern matching
+	;;;
+
+	(def (apply op lst)
+		(if (null? lst)
+			op
+			(apply (op (car lst)) (cdr lst))))
+
+	;;;
+	;;; hygienic macros here also?
+	;;;
+
+	;;;
+	;;; sexp->ast, binary tree
+	;;;
+
+	;  lexp = [fn . [var . body]] | cexp
+	;	cexp = comb | [a . b] | val
+
+	; tahan voisi laittaa valiaikaisesti seq ja def kaannon?
+
+	(def (ast-occurs-free? var exp)
+		(if (eq? var exp) 
+			#t
+			(if (pair? exp)
+				(if (eq? (car exp) lit-sym)
+					#f
+					(if (eq? (car exp) fn-sym)
+						(if (eq? (cadr exp) var)
+							#f
+							(ast-occurs-free? var (cddr exp)))
+						(or 
+							(ast-occurs-free? var (car exp))
+							(ast-occurs-free? var (cdr exp)))))
+				#f)))
+
+	(def ast 
+
+		(def (maybe-seq node)
+			(if (and (pair? node) (eq? (car node) seq-sym))
+				node
+				(cons seq-sym node)))
+
+		(def (ast-lambda formals body)
+			(if (null? formals)
+				body
+				(cons fn-sym
+					(cons (car formals)
+						(ast-lambda (cdr formals) body)))))
+
+		(def (ast-call lst)
+			(def (walk call args)
+				(if (null? args)
+					call
+					(walk (cons call (car args)) (cdr args))))
+			(walk (car lst) (cdr lst)))
+
+		(def (ast-maybe-recurse me body)
+			(if (ast-occurs-free? me body)
+				(seq
+					(cons y-sym 
+						(cons fn-sym
+							(cons me body))))
+				body))
+
+		; -> ((fn (name) ret) body)
+		(def (ast-def ast name body rest)
+			(if (pair? name)
+				(ast-def ast (car name) (cons fn-sym (cons (cdr name) body)) rest)
+				(cons
+					(cons fn-sym 
+						(cons name rest))
+					(ast-maybe-recurse name 
+						(ast body)))))
+
+		; (a b c d) -> (a . (b . (c . d)))
+		(def (ast-seq-apply lst)
+			(foldr
+				(fn (this tail)
+					(if tail (cons this tail) this))
+				#f lst))
+
+		(def (ast-seq-defs ast lst)
+			(if (null? lst)
+				(cons lit-sym 42)			; FIXME technically should be reported as a bug?
+				(if (and (pair? (car lst)) (eq? (caar lst) def-sym))
+					(ast-def ast
+						(cadr (car lst))
+						(maybe-seq (cddr (car lst)))
+						(ast-seq-defs ast (cdr lst)))
+					(ast-seq-apply (map ast lst)))))
+
+		(def (ast-list lst)
+			(if (null? lst)
+				(cons lit-sym null)
+				(cons 
+					(cons cons-sym (car lst))
+					(ast-list (cdr lst)))))
+
+		; FIXME list and others temporarily keywords
+
+		(def (any exp)
+			(if (pair? exp)
+				(if (eq? (car exp) fn-sym)
+					(ast-lambda (cadr exp) (any (maybe-seq (cddr exp))))
+					(if (eq? (car exp) seq-sym)
+						(ast-seq-defs any (cdr exp))
+						(if (eq? (car exp) quote-sym)
+							(cons lit-sym (cadr exp))
+							(if (eq? (car exp) list-sym)
+								(ast-list (map any (cdr exp)))
+								(ast-call (map any exp))))))
+				(if (symbol? exp)
+					exp
+					(cons lit-sym exp))))
+
+		any)
+		
+						
+
+	;;;
+	;;; ast -> combinator exp
+	;;;
+
+	(def (merge-2 op a b) (cons (cons op a) b))
+	(def (merge-3l op rator rand)
+		(cons 
+			(cons 
+				(cons op (cdar rator))
+				(cdr rator))
+			rand))
+
+
+	(def (merge-3r op rator rand)
+		(cons
+			(cons
+				(cons op rator)
+				(cdar rand))
+			(cdr rand)))
+
+	(def (app2-rator? want exp)
+		(and (pair? exp)
+			(and (pair? (car exp))
+				(eq? want (caar exp)))))
+	
+	(def (has-car? v x) (and (pair? x) (eq? (car x) v)))
+
+	(def i? (eq? icom))
+	(def o? (has-car? kcom))
+	(def x? (o not o?))
+	(def ox? (app2-rator? bcom))
+	(def xo? (app2-rator? ccom))
+	(def xx? (app2-rator? scom))
+
+	; FIXME try different sets when repl can run useful benchmarks 
+
+ 	(def (carrier a b)
+		(if (ox? a) 
+			(if (o? b)					
+				(merge-3l cpcom a (cdr b))					;; ox + o = (C' a b c d)
+				(merge-3l spcom a b))						;; ox + x = (S' a b c d) 
+			(if (o? a)
+				(if (ox? b)
+					(merge-3r bpcom (cdr a) b)				;; o + ox = (B' a b c d)
+					(if (i? b) (cdr a)						;; (K a) + I = a
+						(if (o? b)
+							(cons kcom							;; o + o = (K (a b))
+								(cons (cdr a) (cdr b)))
+							(merge-2 bcom (cdr a) b))))   ;; o + x = (B a b)
+				(if (o? b)									
+					(merge-2 ccom a (cdr b)) 				;; x + o = (C a b)
+					(merge-2 scom a b)))))  			 	;; x + x = (S a b)
+
+	(def (literal? exp)
+		(and (pair? exp)
+			(eq? (car exp) lit-sym)))
+
+ 	(def (extract var exp)
+ 		(if (literal? exp)
+ 			(cons kcom exp)
+ 			(if (pair? exp)
+ 				(carrier
+ 					(extract var (car exp))
+ 					(extract var (cdr exp)))
+ 				(if (eq? var exp)
+ 					icom
+ 					(cons kcom exp)))))
+
+	(def (compile exp)
+		(if (eq? (car exp) fn-sym)
+			(extract (cadr exp)
+				(compile (cddr exp)))
+			(if (literal? exp)
+				exp
+				(if (pair? exp)
+					(cons
+						(compile (car exp))
+						(compile (cdr exp)))
+					exp))))
+
+	;;;
+	;;; cexp -> graph reduction code
+	;;;
+
+	(def (pick lst key def)
+		(if (null? lst) def
+			(if (eq? (caar lst) key)
+				(cdar lst)
+				(pick (cdr lst) key def))))
+
+	(def prim-codes
+		(cons (cons (prim 0) 115))	; s
+		(cons (cons (prim 1) 107))	; k
+		(cons (cons (prim 2) 105))	; i
+		(cons (cons (prim 3)  98))	; b
+		(cons (cons (prim 4)  99))	; c
+		(cons (cons (prim 5) 111))	; S = o
+		(cons (cons (prim 6) 109))	; C = m
+		(cons (cons (prim 7) 110))	; B = n
+		(cons (cons (prim 8) 121))	; y
+		(cons (cons (prim 20) 67)) ; cons = C
+		(cons (cons (prim 21) 65)) ; car = A
+		(cons (cons (prim 22) 68)); cdr = D
+		(cons (cons (prim 30) 43)) ; +
+		(cons (cons (prim 31) 45)) ; -
+		(cons (cons (prim 32) 42)) ; *
+		(cons (cons (prim 33) 47)) ; /
+		(cons (cons (prim 34) 37)) ; mod = %
+		(cons (cons (prim 35) 61)) ; =
+		(cons (cons (prim 36) 62)) ; > 
+		(cons (cons (prim 37) 60)) ; <
+		(cons (cons (prim 40) 73)) ; I
+		(cons (cons (prim 41) 78)) ; N
+		(cons (cons (prim 42) 85)) ; U
+		(cons (cons (prim 43) 83)) ; S
+		(cons (cons (prim 44) 69)) ; E
+		(cons (cons (prim 45) 64)) ; @ = @	
+		(cons (cons (prim 47) 36)) ; prim = $
+		(cons (cons (prim 48) 80)) ; pair? = P
+		(cons (cons      null 50))	; null = 2
+		(cons (cons      #t   51))	; true = 3
+		(cons (cons      #f   52))	; false = 4
+		null)
+	
+
+	(def (serialize-lit val tail)
+		(if (and (fixnum? val) (and (< val (+ 100 (+ 100 56))) (> (+ val 1) 0)))
+			(cons 108 (cons val tail))
+			(seq
+				(def char (pick prim-codes val #f))
+				(if char
+					(cons char tail)
+					(seq
+						(@ 48)
+						(debug val)
+						(cons 63 tail))))))
+
+	(def (serialize-prim node tail)
+		(if (eq? node mkapp)
+			(append "Q20" tail)
+			(if (eq? node mksym)
+				(append "Q12" tail)
+				(seq
+					(def char (pick prim-codes node #f))
+					(if char
+						(cons char tail)
+						(seq
+							(debug (cons undefined-sym node))
+							(cons 49 tail)))))))
+	
+	(def (serialize-cexp exp tail)
+		(if (pair? exp)
+			(if (eq? (car exp) lit-sym)
+				(seq
+					(def val (cdr exp))
+					(if (pair? val)
+						(serialize-cexp
+							(cons 
+								(cons cons (cons lit-sym (car val)))
+								(cons lit-sym (cdr val)))
+							tail)
+						(serialize-lit (cdr exp) tail)))
+				(cons 32
+					(serialize-cexp (car exp)
+						(serialize-cexp (cdr exp) tail))))
+			(serialize-prim exp tail)))
+
+	(def (reflect node)
+		(if (pair? node)
+			(if (eq? (car node) lit-sym)
+				(cdr node)
+				(mkapp
+					(reflect (car node))
+					(reflect (cdr node))))
+			node))
+
+	; FIXME: (reflect (reify node)) == node
+	; FIXME: what about sharing?
+
+	(def (reify node) 
+		42)
+
+
+	(def (char? val)
+		(and (fixnum? val)
+			(or 
+				(and (< val 127) (> val 31))
+				(= val 10))))
+
+	(def (render-value obj more)
+		(if (null? obj) 
+			more
+			(if (and (pair? obj) (char? (car obj)))
+				(cons (car obj)
+					(render-value (cdr obj) more))
+				(render-any obj more))))
+
+
+	;;;
+	;;; Repl
+	;;;
+
+	(def (apply-env env node ok fail)
+		(if (pair? node)
+			(if (eq? (car node) lit-sym)
+				(ok node)
+				(apply-env env (car node) 
+					(fn (rator)
+						(apply-env env (cdr node)
+							(fn (rand)
+								(ok (cons rator rand)))
+							fail))
+					fail))
+			(if (symbol? node)
+				(seq
+					; FIXME false not possible
+					(def value (pick env node #f))
+					(if value
+						(if (pair? value)
+							(ok (cons lit-sym value))
+							(ok value))
+						(fail node)))
+				(ok node))))
+
+	; bootstrap -> 
+	(def (bootstrap exp ok fail)
+		(apply-env initial-env (compile (ast exp))
+			(fn (exp)
+				(ok 
+					; prefix code with LEAF to mark begining of combinator code
+					(cons 76 (cons 69 (cons 65 (cons 70 (serialize-cexp exp null)))))))
+			(fn (name)
+				(fail (cons undefined-sym name)))))
+
+	(def (evaluate exp env ok fail)
+		(def lexp (ast exp))
+		(def cexp (compile lexp))
+		;(append " exp: ") (render-any  exp) (emit 10)
+		;(append "lexp: ") (render-any lexp) (emit 10)
+		;(append "cexp: ") (render-any cexp) (emit 10)
+		(apply-env env cexp
+			(fn (val)
+				(ok (reflect val)))
+			(fn (name)
+				(fail (cons undefined-sym name)))))
+
+	; FIXME pattern match later
+	(def (definition? exp)
+		(and (pair? exp) (eq? (car exp) def-sym)))
+
+
+	; (repl-defn name val env cont) -> (cont env')
+
+	(def (repl-defn name val env cont)
+		;(render-any val) (emit 10)
+		(if (pair? name)
+			(repl-defn 
+				(car name)
+				(cons fn-sym (cons (cdr name) (cons val null)))
+				env cont)
+			(evaluate val env
+				(fn (value)	
+					(append "Defining ")
+					(render-any name)
+					(cont (cons (cons name value) env)))
+				(fn (reason)
+					; FIXME HACK: repl fills in recursive definitions by itself
+					(if (and (eq? (car reason) undefined-sym) (eq? (cdr reason) name))
+						(seq
+							(def formals (cadr val))
+							(def body (caddr val))
+							(repl-defn name
+								(cons y-sym
+									(cons 
+										(cons fn-sym (cons (cons name formals) (cons body null)))
+										null))
+								env cont))
+						(seq
+							(append "Definition failed: ")
+							(render-any reason)
+							(cont env)))))))
+
+	(def (repl in syms env)
+		;(emit 10)
+		;(render-any (map car env))
+		;(emit 10)
+		(emit 10)
+		(append "* ")
+		(parse syms in
+			(fn (syms val in)
+				; (@ 43) (@ 32) (debug val) (@ 10)
+				(if (and (pair? val) (eq? (car val) def-sym))
+					(repl-defn (cadr val) (cons seq-sym (cddr val)) env
+						(fn (env)
+							(repl in syms env)))
+					(if (and (pair? val) (eq? (car val) boot-sym))
+						(bootstrap (cadr val)
+							(fn (bytes)
+								(append bytes)
+								(repl in syms env))
+							(fn (error)
+								(append "Bootstrap failed: ")
+								(render-any error)
+								(repl in syms env)))
+						(evaluate val env
+							(fn (val)
+								(render-value val)
+								(repl in syms env))
+							(fn (reason)
+								(append "Failed: ")
+								(render-any reason)
+								(repl in syms env))))))
+			(seq
+				(emit 63)
+				(emit 63)
+				(emit 63)
+				(repl (cdr in) syms env))))
+
+	(def standard-str-env 
+		(def (add name value) (cons (cons name value)))
+
+		(add "fold" fold)
+		(add "foldr" foldr)
+		(add "map" map)
+		(add "length" length)
+		(add "reverse" reverse)
+		(add "append" append)
+		(add "zip" zip)
+		(add "iter" iter)
+		(add "take" take)
+		(add "iota" iota)
+		(add "interval" interval)
+		(add "and" and)
+		(add "or" or)
+		(add "not" not)
+		(add "o" o)
+
+		(add "caar" caar)
+		(add "cadr" cadr)
+		(add "cdar" cdar)
+		(add "cddr" cddr)
+
+		(add "caaar" caaar)
+		(add "caadr" caadr)
+		(add "cadar" cadar)
+		(add "caddr" caddr)
+		(add "cdaar" cdaar)
+		(add "cdadr" cdadr)
+		(add "cddar" cddar)
+		(add "cdddr" cdddr)
+
+		null)
+
+	; intern names from standard env
+	(def standard-syms
+		(fold 
+			(fn (syms bytes)
+				(syms-put syms bytes (mksym bytes)))
+			initial-syms
+			(map car standard-str-env)))
+
+	; convert names and extend initial env with standard bindings
+	(def standard-env
+		(append
+			(map 
+				(fn (node) (cons (syms-get standard-syms (car node)) (cdr node)))
+				standard-str-env)
+			initial-env))
+
+	(fn (in)
+		(append "You sense a prompt.")
+		(emit 10)
+		(repl in standard-syms standard-env))
+
+))
+
+

@@ -1,0 +1,33 @@
+
+; gen n e 2> [term ...]
+(def (gen n e)
+	(if (= n 0)
+		e
+		(foldr append ()
+			;;; abstractions
+			(map
+				(fn (body)
+					(list () (+ (car e) 1)))
+				(gen (- n 1) (+ (car e) 1)))
+			;;; applications
+			(fold
+				(fn (out x) ; x cells left 
+					(fold
+						(fn (out xe) ; xe is a term of size m
+							(fold
+								(fn (out ye) ; ye is a term of size y 
+									(cons (cons xe ye) out))
+								out (gen (- (- n 1) x))))
+						out
+						(gen x e)))
+				()
+				(iota 0 1 n)))))
+
+(def (generate size)
+	(if (= size 0)
+		()
+		(map
+			(fn (a) (list () 0 a))
+			(gen (- size 1) (list 0)))))
+
+(generate 2)

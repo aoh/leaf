@@ -1,0 +1,36 @@
+
+(def bits 
+	((fn (p t)
+		((fn (f x)
+			((fn (r a)
+				((fn (e)
+					(p f (e (a (p f (p f x))))))
+		((fn (e s) (e e s))
+			(fn (e s)
+				(s t t
+					(p f (e e (s f)))
+					(p t (e e (r (s t f) s f))))))))
+
+		
+	(fn (c l)
+		((fn (w) (w w l x))
+			(fn (w l n)
+				(n t
+					(p x (w w (l f) c))
+					(p (l t) (w w (l f) (n f)))))))
+
+	(fn (l)
+		((fn (n) (n n l))
+			(fn (n l) (p l (n n (p f l))))))
+		))
+		(t (fn (x) x))
+		(fn (a) t)
+		))
+	(fn (a b c) (c a b))
+	(fn (a b) a)))
+
+(def (conv s) (cons (s (fn (a b) a) 1 0) (conv (s (fn (a b) b)))))
+(take (conv bits) (* 50 50))
+
+(list 0 1 1 0 1 0 1 0 0 0 1 0 1 0 0 0 1 0 1 0 0 0 1 0 0 0 0 0 1 0 1 0 0 0 0 0 1 0 0 0 1 0 1 0 0 0 1 0 0 0 0)
+

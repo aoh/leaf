@@ -1,0 +1,78 @@
+head	1.2;
+access;
+symbols;
+locks
+	aki:1.2; strict;
+comment	@# @;
+
+
+1.2
+date	2009.03.17.21.28.45;	author aki;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2009.03.17.21.26.55;	author aki;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@*** empty log message ***
+@
+text
+@
+(def (pair a b c) (c a b))
+(def (t a b) a)
+(def (f a b) b)
+(def (nil c a b) t)
+(def (nil? l)  (l t f f))
+(def (rule a b c)
+	(a (b (c f t) (c t t)) (b (c t t) (c f f))))
+
+(def (next l)
+	(def (walk a b l)
+		(nil? l
+			(pair (rule a b f) (pair f nil))
+			(pair (rule a b (l t))
+				(walk b (l t) (l f)))))
+	(walk f (l t) (l f)))
+
+(def (see l more)
+	(nil? l
+		more
+		(cons
+			(l t 111 32)
+			(see (l f) more))))
+
+(def (evolve level)
+	(cons 60
+		(see level
+			(cons 62
+				(cons 10 
+					(evolve
+						(next level)))))))
+
+(evolve 
+	(pair f (pair t (pair f nil))))
+
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@a1 1
+
+a24 2
+(iota 1 1 10)
+	
+d35 1
+@
